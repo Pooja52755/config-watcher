@@ -1,0 +1,1 @@
+boto3==1.34.116 # Or the specific version of boto3 your Lambda environment uses.
