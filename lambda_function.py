@@ -1,131 +1,131 @@
 import boto3
 import json
+import datetime   # for timestamped filenames
 
 def parse_env(content):
-    # Split content by newlines, clean up any carriage returns, and then split by '='
+    # safer split: only split on the first '='
     lines = content.strip().replace('\r', '').split("\n")
-    return {line.split("=")[0]: line.split("=")[1] for line in lines if "=" in line}
+    return {line.split("=", 1)[0]: line.split("=", 1)[1]
+            for line in lines if "=" in line}
 
 def lambda_handler(event, context):
-    s3 = boto3.client('s3')
-    bucket = 'configwatcher-envs'
-    env_files = ['local.env', 'staging.env', 'production.env']
-    configs = {}
+    # --- AWS clients --------------------------------------------------------
+    s3  = boto3.client('s3')
+    ses = boto3.client('ses', region_name='us-east-1')  # adjust if needed
+
+    # --- S3 & file setup ----------------------------------------------------
+    bucket     = 'configwatcher-envs'
+    env_files  = ['local.env', 'staging.env', 'production.env']
+    configs    = {}
 
     for key in env_files:
-        obj = s3.get_object(Bucket=bucket, Key=key)
-        content = obj['Body'].read().decode('utf-8')
-        configs[key.split('.')[0]] = parse_env(content) # Use the updated parse_env
+        obj      = s3.get_object(Bucket=bucket, Key=key)
+        content  = obj['Body'].read().decode('utf-8')
+        configs[key.split('.')[0]] = parse_env(content)
 
-    local = configs['local']
-    staging = configs['staging']
-    production = configs['production']
+    local, staging, production = (configs['local'],
+                                  configs['staging'],
+                                  configs['production'])
 
+    # --- Drift detection ----------------------------------------------------
     drift_report = []
-
-    # Collect all unique keys from all environments
-    all_keys = set(local.keys()).union(staging.keys(), production.keys())
-
-    for key in sorted(list(all_keys)): # Sort keys for consistent report order
-        values = {
-            "local": local.get(key, "❌ MISSING"),
-            "staging": staging.get(key, "❌ MISSING"),
-            "production": production.get(key, "❌ MISSING")
+    all_keys = set(local) | set(staging) | set(production)
+    for k in sorted(all_keys):
+        vals = {
+            'local'      : local.get(k, '❌ MISSING'),
+            'staging'    : staging.get(k, '❌ MISSING'),
+            'production' : production.get(k, '❌ MISSING')
         }
-        # Check for drift: if there's more than one unique value among local, staging, production
-        if len(set(values.values())) > 1:
-            drift_report.append({key: values})
+        if len(set(vals.values())) > 1:
+            drift_report.append({k: vals})
 
-    # --- Email Content Generation ---
-    num_drifts = len(drift_report)
-    subject = f"Config Drift Alert: {num_drifts} Discrepancies Found"
-    if num_drifts == 0:
-        subject = "ConfigWatcher Report: No Drifts Detected"
+    num = len(drift_report)
+    subject = (f"Config Drift Alert: {num} Discrepanc{'y' if num==1 else 'ies'} Found"
+               if num else
+               "ConfigWatcher Report: No Drifts Detected")
 
-    # Plain Text Body
-    plain_body = f"Hello,\n\n"
-    plain_body += f"Your ConfigWatcher detected {num_drifts} configuration drifts.\n\n"
-    if num_drifts > 0:
-        plain_body += "Please review the following discrepancies:\n\n"
-        for drift_item in drift_report:
-            for key, environments in drift_item.items():
-                plain_body += f"  - Variable: {key}\n"
-                for env, value in environments.items():
-                    plain_body += f"    {env.capitalize()}: {value}\n"
-            plain_body += "\n"
-    else:
-        plain_body += "All configurations are consistent across environments. No action required.\n\n"
-    plain_body += "Best regards,\nConfigWatcher"
+    # --- Build email bodies -------------------------------------------------
+    plain_body = build_plain_body(num, drift_report)
+    html_body  = build_html_body(num, drift_report)
 
-
-    # HTML Body
-    html_body = """<html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            h1 {{ color: #d9534f; }}
-            h2 {{ color: #5cb85c; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-            th, td {{ border: 1px solid #ddd; padding: 10px; text-align: left; }}
-            th {{ background-color: #f2f2f2; color: #555; }}
-            .missing {{ color: #d9534f; font-weight: bold; }}
-            .no-drifts {{ color: #5cb85c; font-weight: bold; }}
-        </style>
-    </head>
-    <body>
-    """
-
-    if num_drifts > 0:
-        html_body += f"<h1>Config Drift Alert ({num_drifts} Found)</h1>"
-        html_body += "<p>The following configuration variables have **discrepancies** across your environments:</p>"
-        html_body += "<table>"
-        html_body += "<thead><tr><th>Variable</th><th>Local</th><th>Staging</th><th>Production</th></tr></thead>"
-        html_body += "<tbody>"
-
-        for drift_item in drift_report:
-            for key, environments in drift_item.items():
-                local_val = environments.get('local', '').replace('❌ MISSING', '<span class="missing">❌ MISSING</span>')
-                staging_val = environments.get('staging', '').replace('❌ MISSING', '<span class="missing">❌ MISSING</span>')
-                production_val = environments.get('production', '').replace('❌ MISSING', '<span class="missing">❌ MISSING</span>')
-
-                html_body += f"<tr>"
-                html_body += f"<td><strong>{key}</strong></td>"
-                html_body += f"<td>{local_val}</td>"
-                html_body += f"<td>{staging_val}</td>"
-                html_body += f"<td>{production_val}</td>"
-                html_body += f"</tr>"
-
-        html_body += "</tbody></table>"
-        html_body += "<p>Please investigate these differences to ensure consistency and prevent unexpected behavior.</p>"
-    else:
-        html_body += """<h2 class="no-drifts">✅ No Config Drifts Detected!</h2>
-        <p>All environments are consistent. Your configurations are looking good!</p>"""
-
-    html_body += """
-        <p>This report was generated by ConfigWatcher.</p>
-    </body>
-    </html>
-    """
-
-    # --- SES Client and Send Email ---
-    ses = boto3.client('ses', region_name='us-east-1') # Use correct region
-
-    response = ses.send_email(
-        Source='harshitapoojaande@gmail.com',  # Must be verified in SES
-        Destination={'ToAddresses': ['harshitapoojaande@gmail.com']}, # Must be verified if in sandbox
+    # --- Send the email -----------------------------------------------------
+    ses.send_email(
+        Source='harshitapoojaande@gmail.com',
+        Destination={'ToAddresses': ['ande.harshitapooja@gmail.com']},
         Message={
             'Subject': {'Data': subject},
-            'Body': {
+            'Body'   : {
                 'Html': {'Data': html_body},
-                'Text': {'Data': plain_body} # Provide a plain text fallback
+                'Text': {'Data': plain_body}
             }
-        },
-        # Assuming you've set up a ConfigurationSet named 'MyLambdaEmailEvents' for debugging/monitoring
-        # If not, you can remove this line.
-        # ConfigurationSetName='MyLambdaEmailEvents'
+        }
+    )
+
+    # --- ALSO save HTML report to S3 ---------------------------------------
+    timestamp  = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    report_key = f"reports/drift_{timestamp}.html"   # tidy “folder”
+
+    s3.put_object(
+        Bucket=bucket,
+        Key=report_key,
+        Body=html_body.encode('utf-8'),
+        ContentType='text/html'
     )
 
     return {
         'statusCode': 200,
-        'body': f'Email sent. MessageId: {response["MessageId"]}'
+        'body': json.dumps({
+            'message'   : f'Email sent. Report stored at s3://{bucket}/{report_key}'
+        })
     }
+
+# ---------------------------------------------------------------------------
+# Helper functions (unchanged except split("=",1) safety)
+# ---------------------------------------------------------------------------
+def build_plain_body(num, report):
+    out = [f"Hello,\n\nYour ConfigWatcher detected {num} configuration drift(s).\n"]
+    if num:
+        out.append("Please review the following discrepancies:\n")
+        for item in report:
+            for var, envs in item.items():
+                out.append(f"  - Variable: {var}")
+                for env, val in envs.items():
+                    out.append(f"    {env.capitalize():<10}: {val}")
+            out.append("")
+    else:
+        out.append("All configurations are consistent. No action required.\n")
+    out.append("Best regards,\nConfigWatcher")
+    return "\n".join(out)
+
+def build_html_body(num, report):
+    head = """
+    <html><head><style>
+      body{font-family:Arial,sans-serif;line-height:1.6;color:#333;}
+      table{width:100%;border-collapse:collapse;margin-top:20px;}
+      th,td{border:1px solid #ddd;padding:10px;text-align:left;}
+      th{background:#f2f2f2;color:#555;}
+      .missing{color:#d9534f;font-weight:bold;}
+      .nodrift{color:#5cb85c;font-weight:bold;}
+    </style></head><body>"""
+    tail = "<p>This report was generated by ConfigWatcher.</p></body></html>"
+
+    if num == 0:
+        return head + '<h2 class="nodrift">✅ No Config Drifts Detected!</h2>' + tail
+
+    rows = ""
+    for item in report:
+        for var, envs in item.items():
+            def fmt(x):  # highlight missing entries
+                return x.replace('❌ MISSING',
+                    '<span class="missing">❌ MISSING</span>')
+            rows += (f"<tr><td><strong>{var}</strong></td>"
+                     f"<td>{fmt(envs['local'])}</td>"
+                     f"<td>{fmt(envs['staging'])}</td>"
+                     f"<td>{fmt(envs['production'])}</td></tr>")
+    body = (f"<h1>Config Drift Alert ({num} Found)</h1>"
+            "<p>The following configuration variables have discrepancies:</p>"
+            "<table><thead><tr>"
+            "<th>Variable</th><th>Local</th><th>Staging</th><th>Production</th>"
+            "</tr></thead><tbody>"
+            f"{rows}</tbody></table>")
+    return head + body + tail
