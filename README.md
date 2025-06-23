@@ -49,11 +49,15 @@ It detects missing keys or mismatched values, giving you real-time feedback when
 ```
 [User Uploads .env to S3] → [S3 Trigger] → [AWS Lambda] → [S3 (fetch & store reports)] → [SES (send email)] → [Inbox]
 ```
+<p align="center">
+  <img src="function overview.PNG" alt="ConfigWatcher Architecture" width="200"/>
+</p>
 
 ## 🧪 Testing & Verification
 - **Email Test**: Upload a new .env file to your S3 bucket. You should receive a drift report email from SES within seconds.
 - **S3 Report Test**: Check your S3 bucket for a generated drift report file (HTML or text) after upload.
 - **CloudWatch Logs**: Inspect Lambda execution logs in CloudWatch for detailed run information.
+
 
 ## 📦 Deployment Guide
 1. **S3 Setup**: Upload local.env, staging.env, and production.env to your S3 bucket.
