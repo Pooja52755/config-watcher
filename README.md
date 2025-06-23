@@ -50,7 +50,7 @@ It detects missing keys or mismatched values, giving you real-time feedback when
 [User Uploads .env to S3] → [S3 Trigger] → [AWS Lambda] → [S3 (fetch & store reports)] → [SES (send email)] → [Inbox]
 ```
 <p align="center">
-  <img src="function overview.PNG" alt="ConfigWatcher Architecture" width="200"/>
+  <img src="function overview.PNG" alt="ConfigWatcher Architecture" width="300"/>
 </p>
 
 ## 🧪 Testing & Verification
