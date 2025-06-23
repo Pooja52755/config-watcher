@@ -51,6 +51,23 @@ D --> E[Generate Drift Report]
 E --> F[Send Report via SES]
 F --> G[Inbox: Drift Alert 🚨]
 
+📧 Email Setup for Judges (in README.md)
+
+## 🧪 Testing Email Alerts (Important Note for Judges)
+
+By default, AWS SES only allows sending emails to **verified addresses** when in sandbox mode.
+
+To test the email functionality of ConfigWatcher:
+
+1. Open `lambda_function.py`
+2. Go to the section:
+   ```python
+   Source='harshitapoojaande@gmail.com',
+   Destination={'ToAddresses': ['ande.harshitapooja@gmail.com']},
+Replace both emails with your own verified email addresses in SES (or remove SES code to skip email sending).
+
+Deploy the function and upload .env files to the S3 bucket.
+
 Subject: 🚨 ConfigWatcher: Drift Detected in Production Config
 
 🚀 Why It Matters
@@ -75,7 +92,7 @@ Email sent if drift is detected
 
 Upload new configs → Get updated drift status
 
-🎥 Demo Video Link – Coming Soon
+🎥 Demo Video Link – https://vimeo.com/1095505331?share=copy
 
 📦 Deploy in Minutes
 S3: Upload .env files to your bucket
