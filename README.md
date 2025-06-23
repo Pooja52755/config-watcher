@@ -6,7 +6,10 @@ In today's cloud world, inconsistent settings (like API keys or database hosts) 
 ## 💡 Solution: ConfigWatcher
 ConfigWatcher is a serverless tool that automatically finds differences in .env configuration files across your environments. It then sends clear, easy-to-read reports directly to your email. Built with AWS services, it ensures your configurations stay consistent and gives DevOps teams peace of mind.
 
-![Alt Text for Image](architecture.jpg)
+<p align="center">
+  <img src="images/filename.jpg" alt="ConfigWatcher Architecture" width="400"/>
+</p>
+
 
 
 ## 🔍 How It Works
