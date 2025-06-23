@@ -10,6 +10,7 @@ Manual checks are tedious, error-prone, and unscalable.
 ConfigWatcher is a serverless drift detection tool that monitors .env files across environments and automatically alerts you when any mismatch is found. It is lightweight, cloud-native, and runs entirely on AWS.
 
 🔍 What It Does
+
 ✅ Detects mismatches or missing keys in .env files
 
 ✅ Compares local.env, staging.env, and production.env
@@ -19,6 +20,7 @@ ConfigWatcher is a serverless drift detection tool that monitors .env files acro
 ⚡ Runs automatically when you upload new config files (via S3 trigger)
 
 ✨ Key Features
+
 ✅ S3 Event Trigger: Runs automatically when new .env files are uploaded
 
 ✅ AWS Lambda Powered: Handles parsing, comparison, and emailing
@@ -41,25 +43,18 @@ Service	Purpose
 📊 CloudWatch	Logs Lambda activity
 
 ⚙️ How It Works
-mermaid
-Copy
-Edit
-graph TD
+
 A[S3: .env File Uploaded] --> B[Trigger AWS Lambda]
 B --> C[Fetch all .env Files from S3]
 C --> D[Compare Keys & Values]
 D --> E[Generate Drift Report]
 E --> F[Send Report via SES]
 F --> G[Inbox: Drift Alert 🚨]
-📧 Drift Report Sample
-Variable	Local	Staging	Production	Status
-API_KEY	✅	✅	❌ MISSING	⚠️ Missing
-DB_HOST	localhost	db.staging	db.prod	✅ Consistent
-DEBUG	true	false	false	❗ Value Mismatch
 
 Subject: 🚨 ConfigWatcher: Drift Detected in Production Config
 
 🚀 Why It Matters
+
 ⏱ Saves hours of debugging
 
 🛡 Prevents deployment failures
@@ -69,6 +64,7 @@ Subject: 🚨 ConfigWatcher: Drift Detected in Production Config
 🧪 Perfect for CI/CD pipelines
 
 🧪 Demo Steps
+
 Upload .env files to S3 bucket
 
 Lambda gets triggered automatically
